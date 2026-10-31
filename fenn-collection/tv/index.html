@@ -24,12 +24,14 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;cursor:none;color
 #epiText p{margin:0 0 .7em;opacity:0;transition:opacity 3s}
 #epiText p.on{opacity:1}
 #arm{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#000d;z-index:20;font:600 3vw 'IM Fell English SC',Georgia,serif;color:#e8d8b0;cursor:pointer;text-align:center}
+#status{position:fixed;left:10px;top:8px;z-index:25;max-width:70vw;padding:4px 10px;background:#000b;color:#b9a77f;font:15px system-ui;border-radius:4px;display:none}
 #dbg{position:fixed;left:8px;bottom:8px;z-index:30;background:#000c;padding:8px;border:1px solid #555;font:13px system-ui;display:none;cursor:default;max-width:60vw}
 #dbg button{margin:2px;font:13px system-ui}
 </style></head><body>
-<video id="video" src="../../media/storm_video.webm" loop playsinline preload="auto"></video>
+<video id="video" src="../../media/storm_video.webm" loop playsinline preload="metadata"></video>
 <div id="stage"><div id="board"><img class="bd" src="../img/board.jpg" alt=""><div id="vig"></div><div id="pl"><img src="../img/planchette.png" alt=""></div></div></div>
 <div id="epi"><div id="epiText"></div></div>
+<div id="status"></div>
 <div id="arm">Click once to wake the screen</div>
 <div id="dbg"><div id="dbgLog">TV test panel (press T)</div>
   <button data-m="video">video</button><button data-m="dark">dark</button><button data-m="board">board</button><button data-m="epilogue">epilogue</button>
@@ -111,6 +113,8 @@ async function setMode(m) {
   }
 }
 function resetBoard() { cur = P.REST.slice(); place(cur, 0); queue.length = 0; }
+let statusTimer = null;
+function setStatus(t, ms) { const el = $('#status'); if (!t) { el.style.display = 'none'; return; } el.textContent = t; el.style.display = 'block'; clearTimeout(statusTimer); if (ms) statusTimer = setTimeout(() => (el.style.display = 'none'), ms); }
 function log(t) { const l = $('#dbgLog'); if (l) l.textContent = t; }
 
 // --- planchette movement ---
@@ -198,11 +202,12 @@ async function showEpilogue(instant) {
 }
 
 // --- polling ---
-let since = null, polling = false;
+let since = null, polling = false, connected = false;
 async function poll() {
   if (polling) return; polling = true;
   try {
     const r = await rpc('hw_tv_poll', { p_since: since });
+    if (!connected) { connected = true; setStatus('Connected to the game', 6000); }
     if (r.speed) SPEED = QS / Number(r.speed);
     if (since === null) { since = r.last || 0; }
     else { (r.events || []).forEach((e) => { since = Math.max(since, e.id); enqueue(e); }); }
@@ -210,7 +215,7 @@ async function poll() {
       if (localEpilogue && (r.mode === 'board' || r.mode === 'epilogue')) { /* ending finished locally; wait for GM */ }
       else { localEpilogue = false; await setMode(r.mode); }
     }
-  } catch (e) { log('offline: ' + e.message); }
+  } catch (e) { log('offline: ' + e.message); setStatus('Can\u2019t reach the game server (' + String(e.message).slice(0, 110) + ') \u2014 retrying\u2026'); }
   polling = false;
 }
 
@@ -224,6 +229,8 @@ let testMode = false;
 $('#dKnock').onclick = () => knock(2); $('#dEnd').onclick = () => enqueue({ kind: 'ending' }); $('#dWander').onclick = () => enqueue({ kind: 'wander' });
 $('#dSay').onclick = () => enqueue({ kind: 'say', body: $('#dText').value });
 
+video.addEventListener('error', () => { const c = video.error ? video.error.code : '?'; setStatus('Video problem (code ' + c + '): check media/storm_video.webm'); log('video error ' + c); });
+setTimeout(() => { if (mode === null) { setStatus('Still connecting\u2026 starting the video anyway'); setMode('video'); } }, 3500);
 startVideo();            // tries to start the video straight away; shows "click once" if the browser blocks sound
 setInterval(() => { if (!testMode) poll(); }, 1000); poll();
 if (Q.get('test')) { $('#dbg').style.display = 'block'; document.body.style.cursor = 'default'; }

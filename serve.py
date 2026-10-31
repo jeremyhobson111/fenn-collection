@@ -42,8 +42,10 @@ class H(http.server.SimpleHTTPRequestHandler):
                 dst.write(chunk); left -= len(chunk)
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             pass
-    def log_message(self, fmt, *a):
-        if '/rest/' not in self.path and not self.path.endswith(('.mp3', '.webm')): super().log_message(fmt, *a)
+    def log_request(self, code='-', size='-'):
+        # stay quiet for successful media streaming, but always show errors (e.g. a missing file)
+        if str(code) in ('200', '206') and self.path.split('?')[0].endswith(('.mp3', '.webm')): return
+        super().log_request(code, size)
 
 class S(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
@@ -54,6 +56,8 @@ def lan_ip():
     except Exception: return 'your-pc-ip'
 
 if __name__ == '__main__':
+    for f in ('media/storm_video.webm', 'media/seance_ambience.mp3'):
+        if not os.path.exists(f): print(f'  *** WARNING: {f} is missing on this PC. The TV page needs it (copy the media folder over). ***')
     print(f'\n  The Fenn Collection - local server\n  TV page:    http://localhost:{PORT}/fenn-collection/tv/\n  Phone site: http://localhost:{PORT}/fenn-collection/   (same Wi-Fi: http://{lan_ip()}:{PORT}/fenn-collection/)\n  GM page:    http://localhost:{PORT}/fenn-collection/gm/\n  Press Ctrl+C to stop.\n')
     try: S(('0.0.0.0', PORT), H).serve_forever()
     except KeyboardInterrupt: sys.exit(0)
