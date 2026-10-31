@@ -83,6 +83,8 @@ details .grid{padding:8px;border:1px solid var(--line);border-top:0;border-radiu
   </section>
 
   <section id="t-board" class="hidden">
+    <h3>Board speed</h3>
+    <div class="card"><div style="display:flex;justify-content:space-between"><b id="spLabel">Normal</b><span class="dim">slower &larr; &rarr; faster</span></div><input type="range" id="speed" min="0.5" max="2" step="0.1" value="1" style="width:100%;margin-top:6px"><div class="grid" style="margin-top:8px"><button class="b c" data-sp="0.6">Slow</button><button class="b c" data-sp="1">Normal</button></div></div>
     <div id="script"></div>
     <h3>Custom</h3>
     <input type="text" id="custom" placeholder="Type what June says&hellip;" autocomplete="off" autocapitalize="characters" enterkeyhint="send">
@@ -114,7 +116,7 @@ let PW = ls.get('hw_gm_pw') || '', CFG = null, ST = null, sentTimer = null;
 function toast(t) { const el = $('#sent'); el.textContent = t; el.classList.remove('hidden'); clearTimeout(sentTimer); sentTimer = setTimeout(() => el.classList.add('hidden'), 3500); }
 async function call(fn, args) {
   try { const r = await rpc(fn, Object.assign({ p_pw: PW }, args || {})); if (r && r.error === 'auth') { toast('Password rejected (or locked for 5 min)'); } return r; }
-  catch (e) { toast('Connection trouble'); return null; }
+  catch (e) { toast('Error: ' + String(e.message).slice(0, 120)); return null; }
 }
 
 // ---------- login ----------
@@ -142,6 +144,7 @@ async function refresh() {
   const solved = ST.solved || {};
   $('#chips').innerHTML = ['q1', 'q2', 'q3', 'water'].map((k) => `<span class="chip ${solved[k] ? 'on' : ''}">${k}</span>`).join('');
   $('#modes').textContent = `TV: ${ST.tv_mode}  ·  phones: ${ST.phase}`;
+  if (r.speed != null && !spDrag) setSpeedUI(Number(r.speed));
   const ht = ST.hint ? ST.hint.text : 'nothing';
   $('#curHint').textContent = 'Hint on phones: ' + ht; $('#curHint2').textContent = ht;
   $('#att').innerHTML = (r.attempts.length ? r.attempts : [{ puzzle: '', guess: 'no guesses yet', correct: null }]).map((a) => `<div class="${a.correct === true ? 'ok' : a.correct === false ? 'no' : ''}">${a.correct === true ? '✓' : a.correct === false ? '✗' : ''} ${a.puzzle} &middot; ${esc(a.guess)}</div>`).join('');
@@ -191,6 +194,14 @@ $('#ending').onclick = async () => {
   clearTimeout(endTimer);
   endTimer = setTimeout(async () => { await call('hw_gm_set', { p_phase: 'epilogue', p_mode: 'epilogue' }); toast('Phones: epilogue'); refresh(); }, 62000);
 };
+
+// ---------- board speed ----------
+let spDrag = false;
+function setSpeedUI(v) { $('#speed').value = v; $('#spLabel').textContent = v < 0.9 ? 'Slower (x' + v.toFixed(1) + ')' : v > 1.1 ? 'Faster (x' + v.toFixed(1) + ')' : 'Normal'; }
+async function sendSpeed(v) { setSpeedUI(v); await call('hw_gm_speed', { p_speed: v }); toast('Board speed x' + v.toFixed(1)); }
+$('#speed').addEventListener('input', () => { spDrag = true; setSpeedUI(Number($('#speed').value)); });
+$('#speed').addEventListener('change', async () => { await sendSpeed(Number($('#speed').value)); spDrag = false; });
+document.querySelectorAll('[data-sp]').forEach((b) => (b.onclick = () => sendSpeed(Number(b.dataset.sp))));
 
 // ---------- hints ----------
 function buildHints() {

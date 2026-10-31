@@ -9,7 +9,7 @@ async function rpc(fn, args) {
     headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify(args || {}),
   });
-  if (!r.ok) throw new Error('rpc ' + fn + ' ' + r.status);
+  if (!r.ok) { let t = ''; try { t = (await r.text()).slice(0, 160); } catch (e) {} throw new Error('rpc ' + fn + ' ' + r.status + ' ' + t); }
   return r.json();
 }
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));

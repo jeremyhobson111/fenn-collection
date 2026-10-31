@@ -27,7 +27,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;cursor:none;color
 #dbg{position:fixed;left:8px;bottom:8px;z-index:30;background:#000c;padding:8px;border:1px solid #555;font:13px system-ui;display:none;cursor:default;max-width:60vw}
 #dbg button{margin:2px;font:13px system-ui}
 </style></head><body>
-<video id="video" src="../media/storm_video.webm" loop playsinline preload="auto"></video>
+<video id="video" src="../../media/storm_video.webm" loop playsinline preload="auto"></video>
 <div id="stage"><div id="board"><img class="bd" src="../img/board.jpg" alt=""><div id="vig"></div><div id="pl"><img src="../img/planchette.png" alt=""></div></div></div>
 <div id="epi"><div id="epiText"></div></div>
 <div id="arm">Click once to wake the screen</div>
@@ -40,7 +40,8 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;cursor:none;color
 <script>
 const $ = (s) => document.querySelector(s);
 const Q = new URLSearchParams(location.search);
-const SPEED = Number(Q.get('speed') || 1);           // ?speed=0.2 makes everything 5x faster (for testing)
+const QS = Number(Q.get('speed') || 1);              // ?speed=0.2 makes everything 5x faster (testing only)
+let SPEED = QS;                                       // delay multiplier; the GM page sets it live (bigger = slower)
 const T = (ms) => ms * SPEED;
 const video = $('#video'), stage = $('#stage'), pl = $('#pl'), epi = $('#epi');
 
@@ -53,14 +54,18 @@ const P = { A:[443,829],B:[590,723],C:[760,638],D:[908,600],E:[1069,554],F:[1232
 let cur = P.REST.slice();
 
 // --- audio helpers ---
-const ambience = new Audio('../media/seance_ambience.mp3'); ambience.loop = true; ambience.volume = 0;
+const ambience = new Audio('../../media/seance_ambience.mp3'); ambience.loop = true; ambience.volume = 0;
 const song = new Audio('../audio/song.mp3'); song.loop = true; song.volume = 0;
 function fade(el, to, ms) {
   return new Promise((res) => { const from = el.volume, t0 = performance.now(); ms = Math.max(1, ms);
     (function step() { const k = Math.min(1, (performance.now() - t0) / ms); el.volume = Math.max(0, Math.min(1, from + (to - from) * k)); if (k < 1) requestAnimationFrame(step); else res(); })(); });
 }
-let actx = null;
+const knockSrc = '../audio/knock.mp3'; new Audio(knockSrc).load();
 function knock(n = 2, vol = 0.9) {
+  for (let i = 0; i < n; i++) setTimeout(() => { const a = new Audio(knockSrc); a.volume = vol; a.play().catch(() => synthKnock(1, vol)); }, i * 720);
+}
+let actx = null;
+function synthKnock(n = 2, vol = 0.9) {
   try {
     actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume();
     for (let i = 0; i < n; i++) {
@@ -198,6 +203,7 @@ async function poll() {
   if (polling) return; polling = true;
   try {
     const r = await rpc('hw_tv_poll', { p_since: since });
+    if (r.speed) SPEED = QS / Number(r.speed);
     if (since === null) { since = r.last || 0; }
     else { (r.events || []).forEach((e) => { since = Math.max(since, e.id); enqueue(e); }); }
     if (!endingRunning) {
@@ -221,6 +227,6 @@ $('#dSay').onclick = () => enqueue({ kind: 'say', body: $('#dText').value });
 startVideo();            // tries to start the video straight away; shows "click once" if the browser blocks sound
 setInterval(() => { if (!testMode) poll(); }, 1000); poll();
 if (Q.get('test')) { $('#dbg').style.display = 'block'; document.body.style.cursor = 'default'; }
-window.__tv = { enqueue, setMode, placeKey: (k) => { cur = P[k].slice(); place(cur, 0); }, get mode() { return mode; }, get cur() { return cur; }, P };
+window.__tv = { get speed() { return SPEED; }, enqueue, setMode, placeKey: (k) => { cur = P[k].slice(); place(cur, 0); }, get mode() { return mode; }, get cur() { return cur; }, P };
 </script>
 </body></html>

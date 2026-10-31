@@ -1,5 +1,5 @@
 """Tiny local web server with HTTP Range support (needed for the big storm video).
-Run:  py serve.py   (or double-click start.bat).  Then open http://localhost:8000/tv/
+Run:  py serve.py   (or double-click start.bat).  Then open http://localhost:8000/fenn-collection/tv/
 """
 import http.server, socketserver, os, re, socket, sys
 
@@ -54,6 +54,6 @@ def lan_ip():
     except Exception: return 'your-pc-ip'
 
 if __name__ == '__main__':
-    print(f'\n  The Fenn Collection - local server\n  TV page:    http://localhost:{PORT}/tv/\n  Phone site: http://localhost:{PORT}/   (same Wi-Fi: http://{lan_ip()}:{PORT}/)\n  GM page:    http://localhost:{PORT}/gm/\n  Press Ctrl+C to stop.\n')
+    print(f'\n  The Fenn Collection - local server\n  TV page:    http://localhost:{PORT}/fenn-collection/tv/\n  Phone site: http://localhost:{PORT}/fenn-collection/   (same Wi-Fi: http://{lan_ip()}:{PORT}/fenn-collection/)\n  GM page:    http://localhost:{PORT}/fenn-collection/gm/\n  Press Ctrl+C to stop.\n')
     try: S(('0.0.0.0', PORT), H).serve_forever()
     except KeyboardInterrupt: sys.exit(0)
