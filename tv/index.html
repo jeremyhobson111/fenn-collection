@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>The Fenn Collection</title>
+<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=IM+Fell+English:ital@1&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden;cursor:none;color:#e8d8b0}
+#video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 3s}
+#video.on{opacity:1}
+#stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 4s}
+#stage.on{opacity:1}
+#board{position:relative;width:min(100vw,calc(100vh * 3000 / 1688));aspect-ratio:3000/1688;animation:candle 5s infinite ease-in-out}
+#board img.bd{width:100%;height:100%;display:block;filter:brightness(.82) contrast(1.05) sepia(.15)}
+#vig{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 50%,transparent 38%,rgba(0,0,0,.75) 100%);pointer-events:none}
+@keyframes candle{0%,100%{filter:brightness(1)}20%{filter:brightness(.93)}35%{filter:brightness(1.04)}60%{filter:brightness(.9)}80%{filter:brightness(1.02)}}
+#pl{position:absolute;width:12.5%;left:50%;top:59%;transform:translate(-49.3%,-53.3%);pointer-events:none;transition:left 1.6s cubic-bezier(.45,.05,.3,1),top 1.6s cubic-bezier(.45,.05,.3,1)}
+#pl img{width:100%;display:block;filter:drop-shadow(0 .9vw .9vw rgba(0,0,0,.6));animation:wob 4s infinite ease-in-out;transform-origin:49% 53%}
+@keyframes wob{0%,100%{transform:rotate(-1.1deg)}50%{transform:rotate(1.3deg)}}
+#epi{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 3s;pointer-events:none;background:#000}
+#epi.on{opacity:1}
+#epiText{max-width:min(74vw,1100px);text-align:center;font-family:'IM Fell English',Georgia,serif;font-style:italic;font-size:clamp(18px,3.4vh,42px);line-height:1.4;color:#e3d2a6}
+#epiText p{margin:0 0 .7em;opacity:0;transition:opacity 3s}
+#epiText p.on{opacity:1}
+#arm{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#000d;z-index:20;font:600 3vw 'IM Fell English SC',Georgia,serif;color:#e8d8b0;cursor:pointer;text-align:center}
+#dbg{position:fixed;left:8px;bottom:8px;z-index:30;background:#000c;padding:8px;border:1px solid #555;font:13px system-ui;display:none;cursor:default;max-width:60vw}
+#dbg button{margin:2px;font:13px system-ui}
+</style></head><body>
+<video id="video" src="../media/storm_video.webm" loop playsinline preload="auto"></video>
+<div id="stage"><div id="board"><img class="bd" src="../img/board.jpg" alt=""><div id="vig"></div><div id="pl"><img src="../img/planchette.png" alt=""></div></div></div>
+<div id="epi"><div id="epiText"></div></div>
+<div id="arm">Click once to wake the screen</div>
+<div id="dbg"><div id="dbgLog">TV test panel (press T)</div>
+  <button data-m="video">video</button><button data-m="dark">dark</button><button data-m="board">board</button><button data-m="epilogue">epilogue</button>
+  <button id="dKnock">knock</button><button id="dEnd">ending</button><button id="dWander">wander</button><br>
+  <input id="dText" placeholder="say…" style="width:50%"><button id="dSay">say</button></div>
+
+<script src="../js/api.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const Q = new URLSearchParams(location.search);
+const SPEED = Number(Q.get('speed') || 1);           // ?speed=0.2 makes everything 5x faster (for testing)
+const T = (ms) => ms * SPEED;
+const video = $('#video'), stage = $('#stage'), pl = $('#pl'), epi = $('#epi');
+
+// --- planchette positions (fractions of the 3000x1688 board image; window centre sits on the target) ---
+const BW = 3000, BH = 1688;
+const P = { A:[443,829],B:[590,723],C:[760,638],D:[908,600],E:[1069,554],F:[1232,527],G:[1406,510],H:[1586,510],I:[1742,520],J:[1868,538],K:[2044,580],L:[2210,631],M:[2408,712],N:[2612,812],
+  O:[496,1031],P:[626,960],Q:[818,878],R:[992,825],S:[1168,780],T:[1325,756],U:[1505,750],V:[1706,757],W:[1940,792],X:[2150,866],Y:[2348,928],Z:[2488,1028],
+  '1':[728,1234],'2':[872,1234],'3':[1036,1234],'4':[1202,1234],'5':[1382,1234],'6':[1550,1234],'7':[1714,1234],'8':[1880,1234],'9':[2044,1234],'0':[2234,1234],
+  YES:[683,228],NO:[2333,228],GOODBYE:[1500,1500],REST:[1500,1000] };
+let cur = P.REST.slice();
+
+// --- audio helpers ---
+const ambience = new Audio('../media/seance_ambience.mp3'); ambience.loop = true; ambience.volume = 0;
+const song = new Audio('../audio/song.mp3'); song.loop = true; song.volume = 0;
+function fade(el, to, ms) {
+  return new Promise((res) => { const from = el.volume, t0 = performance.now(); ms = Math.max(1, ms);
+    (function step() { const k = Math.min(1, (performance.now() - t0) / ms); el.volume = Math.max(0, Math.min(1, from + (to - from) * k)); if (k < 1) requestAnimationFrame(step); else res(); })(); });
+}
+let actx = null;
+function knock(n = 2, vol = 0.9) {
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume();
+    for (let i = 0; i < n; i++) {
+      const t = actx.currentTime + 0.05 + i * 0.55;
+      const o = actx.createOscillator(), g = actx.createGain(), f = actx.createBiquadFilter();
+      o.type = 'sine'; o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(55, t + 0.12);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.006); g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+      f.type = 'lowpass'; f.frequency.value = 600; o.connect(f); f.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + 0.25);
+      const nb = actx.createBuffer(1, actx.sampleRate * 0.05, actx.sampleRate), d = nb.getChannelData(0);
+      for (let k = 0; k < d.length; k++) d[k] = (Math.random() * 2 - 1) * Math.pow(1 - k / d.length, 3);
+      const ns = actx.createBufferSource(), ng = actx.createGain(); ns.buffer = nb; ng.gain.value = vol * 0.5; ns.connect(ng); ng.connect(actx.destination); ns.start(t);
+    }
+  } catch (e) {}
+}
+
+// --- autoplay gate ---
+let armed = false;
+async function startVideo() {
+  try { video.volume = 0.5; await video.play(); armed = true; $('#arm').style.display = 'none'; return true; }
+  catch (e) { if (e && e.name === 'NotAllowedError') $('#arm').style.display = 'flex'; return false; }
+}
+['click', 'keydown', 'touchstart'].forEach((ev) => addEventListener(ev, async () => { if (!armed) { await startVideo(); if (mode === 'board') ambience.play().catch(() => {}); if (mode === 'epilogue') song.play().catch(() => {}); } }, { passive: true }));
+
+// --- modes ---
+let mode = null;
+async function setMode(m) {
+  if (m === mode) return; const prev = mode; mode = m; log('mode: ' + m);
+  if (m === 'video') {
+    epi.classList.remove('on'); stage.classList.remove('on'); resetBoard();
+    fade(ambience, 0, T(2500)).then(() => ambience.pause()); fade(song, 0, T(2500)).then(() => song.pause());
+    video.classList.add('on'); if (armed) { video.play().catch(() => {}); fade(video, 0.5, T(2500)); } else startVideo();
+  } else if (m === 'dark') {
+    video.classList.remove('on'); stage.classList.remove('on'); epi.classList.remove('on');
+    fade(video, 0, T(2500)).then(() => video.pause()); fade(ambience, 0, T(2500)); fade(song, 0, T(2500));
+  } else if (m === 'board') {
+    epi.classList.remove('on'); resetBoard(); stage.classList.add('on'); video.classList.remove('on');
+    fade(video, 0, T(3000)).then(() => video.pause());
+    ambience.play().then(() => fade(ambience, 0.6, T(4000))).catch(() => {});
+    wanderLoop();
+  } else if (m === 'epilogue') {
+    stage.classList.remove('on'); video.classList.remove('on'); video.pause(); fade(ambience, 0, T(2000));
+    showEpilogue(true);
+  }
+}
+function resetBoard() { cur = P.REST.slice(); place(cur, 0); queue.length = 0; }
+function log(t) { const l = $('#dbgLog'); if (l) l.textContent = t; }
+
+// --- planchette movement ---
+function place(pt, ms) {
+  const dur = ms == null ? 1600 : ms;
+  pl.style.transition = `left ${dur}ms cubic-bezier(.45,.05,.3,1), top ${dur}ms cubic-bezier(.45,.05,.3,1)`;
+  pl.style.left = (pt[0] / BW * 100) + '%'; pl.style.top = (pt[1] / BH * 100) + '%';
+}
+async function moveTo(pt, hold = 900) {
+  const dx = (pt[0] - cur[0]) / BW * 100, dy = (pt[1] - cur[1]) / BW * 100;       // both in % of board width
+  const dist = Math.hypot(dx, dy);
+  const dur = Math.max(900, Math.min(2300, 800 + dist * 30)) * SPEED;
+  const jit = [(Math.random() - .5) * 14, (Math.random() - .5) * 14];
+  cur = [pt[0] + jit[0], pt[1] + jit[1]]; place(cur, dur); await sleep(dur + T(hold));
+}
+const near = (pt) => [pt[0] + (Math.random() - .5) * 60, pt[1] + (Math.random() - .5) * 60];
+let wandering = false;
+async function wanderOnce(ms = 3500) {
+  const t0 = performance.now();
+  while (performance.now() - t0 < ms * SPEED) { await moveTo([800 + Math.random() * 1400, 700 + Math.random() * 600], 300); }
+}
+async function wanderLoop() { // slow idle drift while waiting
+  if (wandering) return; wandering = true;
+  while (mode === 'board') {
+    if (!busy) { const dx = (Math.random() - .5) * 300, dy = (Math.random() - .5) * 200; cur = [P.REST[0] + dx, P.REST[1] + dy]; place(cur, 4500 * SPEED); }
+    await sleep(T(5200));
+  }
+  wandering = false;
+}
+
+// --- spelling ---
+async function spell(text) {
+  const t = String(text || '').toUpperCase().trim();
+  if (!t) return;
+  if (t === 'YES' || t === 'NO') { await moveTo(P[t], 1400); }
+  else if (t === 'GOODBYE' || t === 'GOOD BYE') { await moveTo(P.GOODBYE, 1800); }
+  else if (/^[.…\s]+$/.test(t)) { await wanderOnce(3500); }
+  else {
+    let prevCh = '';
+    for (const ch of t) {
+      if (/[A-Z0-9]/.test(ch)) {
+        if (ch === prevCh) { const bump = P[ch].slice(); await moveTo([bump[0] + 28, bump[1] + 22], 150); }
+        await moveTo(P[ch], 850); prevCh = ch;
+      } else if (ch === ' ') { await sleep(T(550)); prevCh = ''; }
+      else prevCh = '';
+    }
+  }
+  await sleep(T(1200));
+}
+
+// --- event queue ---
+const queue = []; let busy = false, endingRunning = false;
+async function pump() {
+  if (busy) return; busy = true;
+  while (queue.length) {
+    const e = queue.shift();
+    if (mode !== 'board' && e.kind !== 'sfx') { continue; }
+    try {
+      if (e.kind === 'say') { log('say: ' + e.body); await spell(e.body); }
+      else if (e.kind === 'wander') { await wanderOnce(); }
+      else if (e.kind === 'sfx') { if (e.body === 'knock') knock(2); }
+      else if (e.kind === 'ending') { await runEnding(); }
+    } catch (err) { console.error(err); }
+  }
+  busy = false;
+}
+function enqueue(ev) { queue.push(ev); pump(); }
+
+// --- ending & epilogue ---
+async function runEnding() {
+  endingRunning = true; log('ending');
+  for (const m of ['SHE SAID IT', 'SHE LIVED', 'THANK YOU']) { await spell(m); await sleep(T(2200)); }
+  await spell('GOODBYE'); await sleep(T(3000));
+  stage.classList.remove('on'); fade(ambience, 0, T(5000)); await sleep(T(5000));
+  mode = 'epilogue'; localEpilogue = true; endingRunning = false; await showEpilogue(false);
+}
+let localEpilogue = false;
+async function showEpilogue(instant) {
+  const box = $('#epiText'); box.innerHTML = '';
+  EPILOGUE.forEach((l) => { const p = document.createElement('p'); p.textContent = l; box.appendChild(p); });
+  epi.classList.add('on'); song.currentTime = 0; song.play().then(() => fade(song, 0.4, T(8000))).catch(() => {});
+  const ps = [...box.children];
+  for (let i = 0; i < ps.length; i++) { if (instant) ps[i].classList.add('on'); else { await sleep(T(i === 0 ? 2500 : 4600)); ps[i].classList.add('on'); } }
+  if (!instant) { await sleep(T(7000)); knock(2, 0.5); }
+}
+
+// --- polling ---
+let since = null, polling = false;
+async function poll() {
+  if (polling) return; polling = true;
+  try {
+    const r = await rpc('hw_tv_poll', { p_since: since });
+    if (since === null) { since = r.last || 0; }
+    else { (r.events || []).forEach((e) => { since = Math.max(since, e.id); enqueue(e); }); }
+    if (!endingRunning) {
+      if (localEpilogue && (r.mode === 'board' || r.mode === 'epilogue')) { /* ending finished locally; wait for GM */ }
+      else { localEpilogue = false; await setMode(r.mode); }
+    }
+  } catch (e) { log('offline: ' + e.message); }
+  polling = false;
+}
+
+// --- keys for the owner (no guests have a keyboard) ---
+addEventListener('keydown', (e) => {
+  if (e.key === 'f' || e.key === 'F') { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); }
+  if (e.key === 't' || e.key === 'T') { const d = $('#dbg'); d.style.display = d.style.display === 'block' ? 'none' : 'block'; document.body.style.cursor = d.style.display === 'block' ? 'default' : 'none'; }
+});
+document.querySelectorAll('#dbg [data-m]').forEach((b) => (b.onclick = () => { since = since ?? 0; mode = null; testMode = true; setMode(b.dataset.m); }));
+let testMode = false;
+$('#dKnock').onclick = () => knock(2); $('#dEnd').onclick = () => enqueue({ kind: 'ending' }); $('#dWander').onclick = () => enqueue({ kind: 'wander' });
+$('#dSay').onclick = () => enqueue({ kind: 'say', body: $('#dText').value });
+
+startVideo();            // tries to start the video straight away; shows "click once" if the browser blocks sound
+setInterval(() => { if (!testMode) poll(); }, 1000); poll();
+if (Q.get('test')) { $('#dbg').style.display = 'block'; document.body.style.cursor = 'default'; }
+window.__tv = { enqueue, setMode, placeKey: (k) => { cur = P[k].slice(); place(cur, 0); }, get mode() { return mode; }, get cur() { return cur; }, P };
+</script>
+</body></html>

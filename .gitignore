@@ -1,0 +1,8 @@
+media/
+private/
+PRIVATE-NOTES.txt
+*.webm
+*.part
+*.ytdl
+Thumbs.db
+__pycache__/

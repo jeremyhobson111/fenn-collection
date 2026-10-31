@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>GM</title>
+<style>
+:root{--bg:#121014;--card:#1d1a21;--line:#34303b;--tx:#e9e4ee;--dim:#948da0;--acc:#c9a24a;--ok:#4caf7a;--bad:#d9534f}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,sans-serif;padding-bottom:70px}
+.top{position:sticky;top:0;z-index:5;background:#17141b;border-bottom:1px solid var(--line);padding:8px 10px;display:flex;gap:6px}
+.top button{flex:1;padding:11px 4px;border:0;border-radius:8px;background:var(--card);color:var(--dim);font:600 15px system-ui}
+.top button.on{background:var(--acc);color:#1a1405}
+section{padding:10px}
+h3{margin:16px 2px 8px;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.grid.one{grid-template-columns:1fr}
+button.b{padding:14px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--tx);font:500 16px system-ui;text-align:left}
+button.b:active{background:#2a2630}
+button.b.acc{background:var(--acc);color:#1a1405;border-color:var(--acc);font-weight:700;text-align:center}
+button.b.red{border-color:#7a2b2b;color:#ff9b96}
+button.b.c{text-align:center}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:5px 10px;border-radius:99px;background:var(--card);border:1px solid var(--line);font-size:14px;color:var(--dim)}
+.chip.on{color:#0c2016;background:var(--ok);border-color:var(--ok)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0}
+input[type=text],input[type=password]{width:100%;padding:13px;border-radius:10px;border:1px solid var(--line);background:#0e0c11;color:var(--tx);font:16px system-ui}
+.att{font:13px/1.35 ui-monospace,monospace;color:var(--dim);max-height:210px;overflow:auto}
+.att .ok{color:var(--ok)}.att .no{color:var(--bad)}
+.sent{position:fixed;left:10px;right:10px;bottom:10px;background:#000c;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;z-index:9;backdrop-filter:blur(6px)}
+.hidden{display:none!important}
+details summary{padding:12px;background:var(--card);border:1px solid var(--line);border-radius:10px;font-weight:600;list-style:none}
+details[open] summary{border-bottom-left-radius:0;border-bottom-right-radius:0}
+details .grid{padding:8px;border:1px solid var(--line);border-top:0;border-radius:0 0 10px 10px}
+.dim{color:var(--dim);font-size:13px}
+</style></head><body>
+
+<section id="login" class="">
+  <h3>Gamemaster</h3>
+  <input type="password" id="pw" placeholder="Password" autocomplete="current-password">
+  <div style="height:8px"></div><button class="b acc" id="go">Enter</button>
+  <p class="dim" id="loginMsg"></p>
+</section>
+
+<div id="app" class="hidden">
+  <div class="top"><button data-t="game" class="on">Game</button><button data-t="board">Board</button><button data-t="hints">Hints</button></div>
+
+  <section id="t-game">
+    <h3>Status</h3>
+    <div class="card"><div class="chips" id="chips"></div><div class="dim" style="margin-top:8px" id="modes"></div><div class="dim" id="curHint"></div></div>
+
+    <h3>Sounds (plays on this phone)</h3>
+    <div class="grid">
+      <button class="b" data-snd="doorbell_manor">&#128276; Doorbell: manor</button>
+      <button class="b" data-snd="doorbell_ring">&#128276; Doorbell: Ring</button>
+      <button class="b" id="songBtn">&#127925; Play song</button>
+      <button class="b red" id="stopBtn">&#9632; Stop all</button>
+    </div>
+    <div class="card" style="margin-top:8px"><span class="dim">Song volume</span><input type="range" id="vol" min="0" max="1" step="0.05" value="0.8" style="width:100%"></div>
+
+    <h3>TV</h3>
+    <div class="grid">
+      <button class="b c" data-tv="video">Storm video</button>
+      <button class="b c" data-tv="dark">Black</button>
+      <button class="b acc" id="wake" style="grid-column:1/3">WAKE THE BOARD<br><small>TV &rarr; board &middot; phones &rarr; &ldquo;join hands&rdquo;</small></button>
+    </div>
+
+    <h3>Phones</h3>
+    <div class="grid">
+      <button class="b c" data-ph="archive">Archive</button>
+      <button class="b c" data-ph="sitting">Sitting</button>
+      <button class="b c" data-ph="epilogue">Epilogue</button>
+    </div>
+
+    <h3>Skip a puzzle</h3>
+    <div class="grid"><button class="b c" data-solve="q1">Q1 hand</button><button class="b c" data-solve="q2">Q2 knocks</button><button class="b c" data-solve="q3">Q3 cellar</button><button class="b c" data-solve="water">WATER</button></div>
+
+    <h3>Live guesses</h3>
+    <div class="card att" id="att">&hellip;</div>
+
+    <h3>Danger</h3>
+    <button class="b red c" id="reset" style="width:100%">Reset the whole game</button>
+  </section>
+
+  <section id="t-board" class="hidden">
+    <div id="script"></div>
+    <h3>Custom</h3>
+    <input type="text" id="custom" placeholder="Type what June says&hellip;" autocomplete="off" autocapitalize="characters" enterkeyhint="send">
+    <div style="height:8px"></div>
+    <div class="grid"><button class="b acc" id="sayCustom">Say it</button><button class="b c" id="wander">Wander&hellip;</button><button class="b c" id="knock">Knock &times; 2</button><button class="b c" data-say="GOODBYE">GOODBYE</button></div>
+    <h3>Finale</h3>
+    <button class="b red c" id="ending" style="width:100%;padding:20px">THE ENDING &mdash; someone said &ldquo;Marigold&rdquo;</button>
+    <p class="dim">Tap once, then confirm. Phones switch to the epilogue about a minute later.</p>
+  </section>
+
+  <section id="t-hints" class="hidden">
+    <div class="card"><div class="dim">Currently showing on phones:</div><div id="curHint2" style="margin:4px 0 8px">nothing</div><button class="b red c" id="clearHint" style="width:100%">Clear hint</button></div>
+    <h3>Custom hint</h3>
+    <input type="text" id="customHint" placeholder="Type a hint&hellip;" autocomplete="off" enterkeyhint="send">
+    <div style="height:8px"></div><button class="b acc" id="sendHint" style="width:100%">Send to all phones</button>
+    <h3>Prepared hints (tap to send)</h3>
+    <div id="hintList"></div>
+  </section>
+</div>
+
+<div class="sent hidden" id="sent"></div>
+
+<script src="../js/api.js"></script>
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const ls = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }, del: (k) => { try { localStorage.removeItem(k); } catch (e) {} } };
+let PW = ls.get('hw_gm_pw') || '', CFG = null, ST = null, sentTimer = null;
+
+function toast(t) { const el = $('#sent'); el.textContent = t; el.classList.remove('hidden'); clearTimeout(sentTimer); sentTimer = setTimeout(() => el.classList.add('hidden'), 3500); }
+async function call(fn, args) {
+  try { const r = await rpc(fn, Object.assign({ p_pw: PW }, args || {})); if (r && r.error === 'auth') { toast('Password rejected (or locked for 5 min)'); } return r; }
+  catch (e) { toast('Connection trouble'); return null; }
+}
+
+// ---------- login ----------
+async function login(pw) {
+  PW = pw; const cfg = await call('hw_gm_config');
+  if (!cfg || cfg.error) { $('#loginMsg').textContent = 'No luck.'; ls.del('hw_gm_pw'); $('#login').classList.remove('hidden'); $('#app').classList.add('hidden'); return false; }
+  ls.set('hw_gm_pw', pw); CFG = cfg; $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
+  buildScript(); buildHints(); refresh(); setInterval(refresh, 2000); keepAwake(); return true;
+}
+$('#go').onclick = () => login($('#pw').value);
+$('#pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') login($('#pw').value); });
+if (PW) login(PW);
+
+async function keepAwake() { try { if (navigator.wakeLock) { await navigator.wakeLock.request('screen'); document.addEventListener('visibilitychange', () => { if (!document.hidden) navigator.wakeLock.request('screen').catch(() => {}); }); } } catch (e) {} }
+
+// ---------- tabs ----------
+document.querySelectorAll('.top button').forEach((b) => (b.onclick = () => {
+  document.querySelectorAll('.top button').forEach((x) => x.classList.toggle('on', x === b));
+  ['game', 'board', 'hints'].forEach((t) => $('#t-' + t).classList.toggle('hidden', t !== b.dataset.t));
+}));
+
+// ---------- status ----------
+async function refresh() {
+  const r = await call('hw_gm_state'); if (!r || r.error) return; ST = r.state;
+  const solved = ST.solved || {};
+  $('#chips').innerHTML = ['q1', 'q2', 'q3', 'water'].map((k) => `<span class="chip ${solved[k] ? 'on' : ''}">${k}</span>`).join('');
+  $('#modes').textContent = `TV: ${ST.tv_mode}  ·  phones: ${ST.phase}`;
+  const ht = ST.hint ? ST.hint.text : 'nothing';
+  $('#curHint').textContent = 'Hint on phones: ' + ht; $('#curHint2').textContent = ht;
+  $('#att').innerHTML = (r.attempts.length ? r.attempts : [{ puzzle: '', guess: 'no guesses yet', correct: null }]).map((a) => `<div class="${a.correct === true ? 'ok' : a.correct === false ? 'no' : ''}">${a.correct === true ? '✓' : a.correct === false ? '✗' : ''} ${a.puzzle} &middot; ${esc(a.guess)}</div>`).join('');
+}
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+// ---------- sounds ----------
+let playing = [];
+function playSnd(name, vol) { const a = new Audio(`../audio/${name}.mp3`); a.volume = vol == null ? 1 : vol; a.play().catch(() => toast('Tap again to allow audio')); playing.push(a); return a; }
+document.querySelectorAll('[data-snd]').forEach((b) => (b.onclick = () => { playSnd(b.dataset.snd, 1); toast('Playing ' + b.dataset.snd); }));
+let song = null;
+$('#songBtn').onclick = () => {
+  if (song && !song.paused) { song.pause(); $('#songBtn').innerHTML = '&#127925; Play song'; return; }
+  if (!song) { song = new Audio('../audio/song.mp3'); song.loop = true; }
+  song.volume = Number($('#vol').value); song.play().catch(() => toast('Tap again to allow audio')); $('#songBtn').innerHTML = '&#10074;&#10074; Pause song';
+};
+$('#vol').oninput = () => { if (song) song.volume = Number($('#vol').value); };
+$('#stopBtn').onclick = () => { playing.forEach((a) => a.pause()); if (song) { song.pause(); song.currentTime = 0; } $('#songBtn').innerHTML = '&#127925; Play song'; };
+
+// ---------- TV / phones / puzzles ----------
+document.querySelectorAll('[data-tv]').forEach((b) => (b.onclick = async () => { await call('hw_gm_set', { p_phase: null, p_mode: b.dataset.tv }); toast('TV: ' + b.dataset.tv); refresh(); }));
+document.querySelectorAll('[data-ph]').forEach((b) => (b.onclick = async () => { await call('hw_gm_set', { p_phase: b.dataset.ph, p_mode: null }); toast('Phones: ' + b.dataset.ph); refresh(); }));
+document.querySelectorAll('[data-solve]').forEach((b) => (b.onclick = async () => { await call('hw_gm_solve', { p_puzzle: b.dataset.solve }); toast('Solved ' + b.dataset.solve); refresh(); }));
+$('#wake').onclick = async () => { await call('hw_gm_set', { p_phase: 'sitting', p_mode: 'board' }); toast('Board awake'); refresh(); };
+$('#reset').onclick = async () => { if (!confirm('Reset EVERYTHING (puzzles, TV, phones)?')) return; if (!confirm('Really? Guests’ progress is wiped.')) return; await call('hw_gm_reset'); toast('Reset'); refresh(); };
+
+// ---------- board ----------
+function buildScript() {
+  $('#script').innerHTML = '';
+  (CFG.script || []).forEach((g) => {
+    const h = document.createElement('h3'); h.textContent = g.title; $('#script').appendChild(h);
+    const grid = document.createElement('div'); grid.className = 'grid' + (g.lines.length === 1 ? ' one' : '');
+    g.lines.forEach((l) => { const b = document.createElement('button'); b.className = 'b'; b.textContent = l; b.onclick = () => say(l); grid.appendChild(b); });
+    $('#script').appendChild(grid);
+  });
+}
+async function say(t) { const text = String(t).trim(); if (!text) return; const kind = /^[.…\s]+$/.test(text) ? 'wander' : 'say'; await call('hw_gm_say', { p_kind: kind, p_body: text }); toast((kind === 'wander' ? 'wander' : 'sent') + ': ' + text); }
+$('#sayCustom').onclick = async () => { await say($('#custom').value); $('#custom').value = ''; };
+$('#custom').addEventListener('keydown', async (e) => { if (e.key === 'Enter') { await say($('#custom').value); $('#custom').value = ''; } });
+$('#wander').onclick = async () => { await call('hw_gm_say', { p_kind: 'wander', p_body: '' }); toast('wandering…'); };
+$('#knock').onclick = async () => { await call('hw_gm_say', { p_kind: 'sfx', p_body: 'knock' }); toast('knock knock'); };
+document.querySelectorAll('[data-say]').forEach((b) => (b.onclick = () => say(b.dataset.say)));
+let endTimer = null;
+$('#ending').onclick = async () => {
+  if (!confirm('Run the ending now?')) return;
+  await call('hw_gm_say', { p_kind: 'ending', p_body: '' }); toast('The ending is playing. Keep this page open.');
+  clearTimeout(endTimer);
+  endTimer = setTimeout(async () => { await call('hw_gm_set', { p_phase: 'epilogue', p_mode: 'epilogue' }); toast('Phones: epilogue'); refresh(); }, 62000);
+};
+
+// ---------- hints ----------
+function buildHints() {
+  const box = $('#hintList'); box.innerHTML = '';
+  (CFG.hints || []).forEach((g) => {
+    const d = document.createElement('details'); const s = document.createElement('summary'); s.textContent = g.title; d.appendChild(s);
+    const grid = document.createElement('div'); grid.className = 'grid one';
+    g.items.forEach((t, i) => { const b = document.createElement('button'); b.className = 'b'; b.textContent = (i + 1) + '. ' + t; b.onclick = () => sendHint(t); grid.appendChild(b); });
+    d.appendChild(grid); box.appendChild(d);
+  });
+}
+async function sendHint(t) { await call('hw_gm_hint', { p_text: t }); toast('Hint sent'); refresh(); }
+$('#sendHint').onclick = async () => { const v = $('#customHint').value.trim(); if (!v) return; await sendHint(v); $('#customHint').value = ''; };
+$('#customHint').addEventListener('keydown', async (e) => { if (e.key === 'Enter') { const v = $('#customHint').value.trim(); if (v) { await sendHint(v); $('#customHint').value = ''; } } });
+$('#clearHint').onclick = async () => { await call('hw_gm_hint', { p_text: '' }); toast('Hint cleared'); refresh(); };
+</script>
+</body></html>
